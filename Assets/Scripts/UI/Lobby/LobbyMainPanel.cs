@@ -3,9 +3,9 @@ using Photon.Realtime;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Photon.Pun;
 
-namespace Photon.Pun.Demo.Asteroids
-{
+
     public class LobbyMainPanel : MonoBehaviourPunCallbacks
     {
         [Header("Login Panel")]
@@ -108,7 +108,6 @@ namespace Photon.Pun.Demo.Asteroids
             // joining (or entering) a room invalidates any cached lobby room list (even if LeaveLobby was not called due to just joining a room)
             cachedRoomList.Clear();
 
-
             SetActivePanel(InsideRoomPanel.name);
 
             if (playerListEntries == null)
@@ -124,7 +123,7 @@ namespace Photon.Pun.Demo.Asteroids
                 entry.GetComponent<PlayerListEntry>().Initialize(p.ActorNumber, p.NickName);
 
                 object isPlayerReady;
-                if (p.CustomProperties.TryGetValue(AsteroidsGame.PLAYER_READY, out isPlayerReady))
+                if (p.CustomProperties.TryGetValue(GameManager.PLAYER_READY, out isPlayerReady))
                 {
                     entry.GetComponent<PlayerListEntry>().SetPlayerReady((bool) isPlayerReady);
                 }
@@ -136,7 +135,7 @@ namespace Photon.Pun.Demo.Asteroids
 
             Hashtable props = new Hashtable
             {
-                {AsteroidsGame.PLAYER_LOADED_LEVEL, false}
+                {GameManager.PLAYER_READY, false}
             };
             PhotonNetwork.LocalPlayer.SetCustomProperties(props);
         }
@@ -193,7 +192,7 @@ namespace Photon.Pun.Demo.Asteroids
             if (playerListEntries.TryGetValue(targetPlayer.ActorNumber, out entry))
             {
                 object isPlayerReady;
-                if (changedProps.TryGetValue(AsteroidsGame.PLAYER_READY, out isPlayerReady))
+                if (changedProps.TryGetValue(GameManager.PLAYER_READY, out isPlayerReady))
                 {
                     entry.GetComponent<PlayerListEntry>().SetPlayerReady((bool) isPlayerReady);
                 }
@@ -269,10 +268,24 @@ namespace Photon.Pun.Demo.Asteroids
 
         public void OnStartGameButtonClicked()
         {
-            PhotonNetwork.CurrentRoom.IsOpen = false;
-            PhotonNetwork.CurrentRoom.IsVisible = false;
-
-            PhotonNetwork.LoadLevel("HeroSelection");
+            // MODIFICADO: Usar GameManager para cambiar de estado en lugar de cargar la escena directamente
+            if (GameManager.Instance != null)
+            {
+                // Asignar equipos automáticamente antes de cambiar de escena
+                GameManager.Instance.AssignTeamsAutomatically();
+                
+                // Cambiar al estado de selección de héroe
+                GameManager.Instance.ChangeState(GameManager.GameState.HeroSelection);
+            }
+            else
+            {
+                Debug.LogError("GameManager no encontrado. Verifica que exista en la escena.");
+                
+                // Fallback al comportamiento original
+                PhotonNetwork.CurrentRoom.IsOpen = false;
+                PhotonNetwork.CurrentRoom.IsVisible = false;
+                PhotonNetwork.LoadLevel("HeroSelection");
+            }
         }
 
         #endregion
@@ -284,10 +297,16 @@ namespace Photon.Pun.Demo.Asteroids
                 return false;
             }
 
+            // Verificar si hay al menos 2 jugadores
+            if (PhotonNetwork.PlayerList.Length < 2)
+            {
+                return false;
+            }
+
             foreach (Player p in PhotonNetwork.PlayerList)
             {
                 object isPlayerReady;
-                if (p.CustomProperties.TryGetValue(AsteroidsGame.PLAYER_READY, out isPlayerReady))
+                if (p.CustomProperties.TryGetValue(GameManager.PLAYER_READY, out isPlayerReady))
                 {
                     if (!(bool) isPlayerReady)
                     {
@@ -318,7 +337,7 @@ namespace Photon.Pun.Demo.Asteroids
             StartGameButton.gameObject.SetActive(CheckPlayersReady());
         }
 
-        private void SetActivePanel(string activePanel)
+        void SetActivePanel(string activePanel)
         {
             LoginPanel.SetActive(activePanel.Equals(LoginPanel.name));
             SelectionPanel.SetActive(activePanel.Equals(SelectionPanel.name));
@@ -369,4 +388,3 @@ namespace Photon.Pun.Demo.Asteroids
             }
         }
     }
-}

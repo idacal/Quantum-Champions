@@ -4,6 +4,9 @@ using Photon.Realtime;
 using UnityEngine;
 using System.Collections;
 
+// Resolución de ambigüedad
+using Hashtable = ExitGames.Client.Photon.Hashtable;
+
 public class HeroSelectionManager : MonoBehaviourPunCallbacks
 {
     public static HeroSelectionManager Instance;
@@ -42,6 +45,16 @@ public class HeroSelectionManager : MonoBehaviourPunCallbacks
         {
             playerSelections[player.ActorNumber] = null;
             playerReadyStatus[player.ActorNumber] = false;
+            
+            // Asignar equipos si no están asignados ya
+            if (!player.CustomProperties.ContainsKey(GameManager.PLAYER_TEAM))
+            {
+                // Hacer que el GameManager asigne equipos
+                if (GameManager.Instance != null && PhotonNetwork.IsMasterClient)
+                {
+                    GameManager.Instance.AssignTeamsAutomatically();
+                }
+            }
         }
         
         // Iniciar countdown
@@ -93,6 +106,11 @@ public class HeroSelectionManager : MonoBehaviourPunCallbacks
         if (hero != null)
         {
             photonView.RPC("SyncHeroSelection", RpcTarget.Others, actorNumber, hero.name);
+            
+            // También guardar como propiedad personalizada para persistencia
+            Hashtable props = new Hashtable();
+            props.Add(GameManager.PLAYER_HERO_SELECTION, hero.name);
+            PhotonNetwork.LocalPlayer.SetCustomProperties(props);
         }
     }
     
@@ -173,6 +191,21 @@ public class HeroSelectionManager : MonoBehaviourPunCallbacks
             {
                 hero = heroRegistry.GetRandomHero();
                 playerSelections[actorNumber] = hero;
+                
+                // Sincronizar selección aleatoria
+                if (PhotonNetwork.IsMasterClient)
+                {
+                    photonView.RPC("SyncHeroSelection", RpcTarget.Others, actorNumber, hero.name);
+                    
+                    // Guardar en propiedades personalizadas para el jugador
+                    Player player = PhotonNetwork.CurrentRoom.GetPlayer(actorNumber);
+                    if (player != null)
+                    {
+                        Hashtable props = new Hashtable();
+                        props.Add(GameManager.PLAYER_HERO_SELECTION, hero.name);
+                        player.SetCustomProperties(props);
+                    }
+                }
             }
             
             // Guardar la selección para usarla en el juego
@@ -192,7 +225,34 @@ public class HeroSelectionManager : MonoBehaviourPunCallbacks
     private IEnumerator StartGameAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        GameManager.Instance.ChangeState(GameManager.GameState.InGame);
+        
+        // Usar el GameManager para cambiar al estado de juego
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.StartGameAfterHeroSelection();
+        }
+        else
+        {
+            // Fallback por si no se encuentra el GameManager
+            PhotonNetwork.LoadLevel("GameScene");
+        }
+    }
+    
+    // Obtener el equipo de un jugador (0 o 1)
+    public int GetPlayerTeam(int actorNumber)
+    {
+        Player player = PhotonNetwork.CurrentRoom.GetPlayer(actorNumber);
+        if (player != null)
+        {
+            object teamObj;
+            if (player.CustomProperties.TryGetValue(GameManager.PLAYER_TEAM, out teamObj))
+            {
+                return (int)teamObj;
+            }
+        }
+        
+        // Por defecto, calcular el equipo basado en el número de actor
+        return actorNumber % 2;
     }
     
     public HeroDefinition GetPlayerSelection(int actorNumber)
@@ -218,6 +278,12 @@ public class HeroSelectionManager : MonoBehaviourPunCallbacks
     {
         playerSelections[newPlayer.ActorNumber] = null;
         playerReadyStatus[newPlayer.ActorNumber] = false;
+        
+        // Asignar equipo al nuevo jugador si es necesario
+        if (!newPlayer.CustomProperties.ContainsKey(GameManager.PLAYER_TEAM) && PhotonNetwork.IsMasterClient)
+        {
+            GameManager.Instance.AssignTeamsAutomatically();
+        }
     }
     
     // Manejar cuando un jugador se va durante la selección

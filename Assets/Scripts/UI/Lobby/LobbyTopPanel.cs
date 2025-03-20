@@ -1,8 +1,8 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using Photon.Pun;
 
-namespace Photon.Pun.Demo.Asteroids
-{
+
     public class LobbyTopPanel : MonoBehaviour
     {
         private readonly string connectionStatusMessage = "    Connection Status: ";
@@ -19,4 +19,3 @@ namespace Photon.Pun.Demo.Asteroids
 
         #endregion
     }
-}

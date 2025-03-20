@@ -1,22 +1,12 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
-// <copyright file="PlayerListEntry.cs" company="Exit Games GmbH">
-//   Part of: Asteroid Demo,
-// </copyright>
-// <summary>
-//  Player List Entry
-// </summary>
-// <author>developer@exitgames.com</author>
-// --------------------------------------------------------------------------------------------------------------------
-
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
-
+using Photon.Pun;
 using ExitGames.Client.Photon;
 using Photon.Realtime;
 using Photon.Pun.UtilityScripts;
 
-namespace Photon.Pun.Demo.Asteroids
-{
+
+
     public class PlayerListEntry : MonoBehaviour
     {
         [Header("UI References")]
@@ -44,7 +34,12 @@ namespace Photon.Pun.Demo.Asteroids
             }
             else
             {
-                Hashtable initialProps = new Hashtable() {{AsteroidsGame.PLAYER_READY, isPlayerReady}, {AsteroidsGame.PLAYER_LIVES, AsteroidsGame.PLAYER_MAX_LIVES}};
+                // Inicializar propiedades del jugador
+                Hashtable initialProps = new Hashtable() 
+                { 
+                    {GameManager.PLAYER_READY, isPlayerReady}
+                };
+                
                 PhotonNetwork.LocalPlayer.SetCustomProperties(initialProps);
                 PhotonNetwork.LocalPlayer.SetScore(0);
 
@@ -53,16 +48,17 @@ namespace Photon.Pun.Demo.Asteroids
                     isPlayerReady = !isPlayerReady;
                     SetPlayerReady(isPlayerReady);
 
-                    Hashtable props = new Hashtable() {{AsteroidsGame.PLAYER_READY, isPlayerReady}};
+                    Hashtable props = new Hashtable() {{GameManager.PLAYER_READY, isPlayerReady}};
                     PhotonNetwork.LocalPlayer.SetCustomProperties(props);
 
                     if (PhotonNetwork.IsMasterClient)
                     {
-                        #if UNITY_6000_0_OR_NEWER
-                        FindFirstObjectByType<LobbyMainPanel>().LocalPlayerPropertiesUpdated();
-                        #else
-                        FindObjectOfType<LobbyMainPanel>().LocalPlayerPropertiesUpdated();
-                        #endif
+                        // Buscar LobbyMainPanel y notificar cambio de propiedades
+                        LobbyMainPanel[] lobbies = FindObjectsOfType<LobbyMainPanel>();
+                        if (lobbies != null && lobbies.Length > 0)
+                        {
+                            lobbies[0].LocalPlayerPropertiesUpdated();
+                        }
                     }
                 });
             }
@@ -87,7 +83,18 @@ namespace Photon.Pun.Demo.Asteroids
             {
                 if (p.ActorNumber == ownerId)
                 {
-                    PlayerColorImage.color = AsteroidsGame.GetColor(p.GetPlayerNumber());
+                    // Obtener color del equipo si está asignado
+                    object teamObj;
+                    if (p.CustomProperties.TryGetValue(GameManager.PLAYER_TEAM, out teamObj))
+                    {
+                        int team = (int)teamObj;
+                        PlayerColorImage.color = GetTeamColor(team);
+                    }
+                    else
+                    {
+                        // Si no hay equipo asignado, usar color por defecto basado en número de jugador
+                        PlayerColorImage.color = GetDefaultColor(p.GetPlayerNumber());
+                    }
                 }
             }
         }
@@ -97,5 +104,23 @@ namespace Photon.Pun.Demo.Asteroids
             PlayerReadyButton.GetComponentInChildren<Text>().text = playerReady ? "Ready!" : "Ready?";
             PlayerReadyImage.enabled = playerReady;
         }
+        
+        // Obtener color basado en el equipo asignado (0=azul, 1=rojo)
+        private Color GetTeamColor(int teamId)
+        {
+            return teamId == 0 ? new Color(0.0f, 0.2f, 1.0f) : new Color(1.0f, 0.0f, 0.0f);
+        }
+        
+        // Colores por defecto basados en el número de jugador (para compatibilidad)
+        private Color GetDefaultColor(int playerNumber)
+        {
+            switch(playerNumber % 4)
+            {
+                case 0: return new Color(0.0f, 0.2f, 1.0f); // Azul
+                case 1: return new Color(1.0f, 0.0f, 0.0f); // Rojo
+                case 2: return new Color(0.0f, 0.8f, 0.2f); // Verde
+                case 3: return new Color(1.0f, 1.0f, 0.0f); // Amarillo
+                default: return Color.gray;
+            }
+        }
     }
-}
